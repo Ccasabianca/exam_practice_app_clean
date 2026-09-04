@@ -1,28 +1,53 @@
-// Point d'entrée du serveur backend
-require('dotenv').config();
-const express = require('express');
-const cors = require('cors');
+/** point d'entrée : configuration, mongodb, écoute http, arrêt propre @module server */
+let config;
+try {
+  config = require('./config/env');
+} catch (err) {
+  // le logger dépend de la config, on écrit directement sur stderr
+  process.stderr.write(`${err.message}\n`);
+  process.exit(1);
+}
+
+const mongoose = require('mongoose');
+const logger = require('./utils/logger');
 const connectDB = require('./config/db');
+const app = require('./app');
 
-// Connexion à la base de données
-connectDB();
+async function start() {
+  await connectDB(config.mongoUri);
 
-const app = express();
+  const server = app.listen(config.port, () => {
+    logger.info(`API démarrée sur le port ${config.port}`, {
+      env: config.env,
+      corsOrigins: config.corsOrigins,
+    });
+  });
 
-// Middleware
-app.use(cors());
-app.use(express.json());
+  // fix : arrêt propre sur sigint et sigterm, mongodb fermé avant de quitter
+  const shutdown = (signal) => {
+    logger.info(`Signal ${signal} reçu, arrêt en cours`);
+    server.close(async () => {
+      await mongoose.disconnect();
+      logger.info('Arrêt terminé');
+      process.exit(0);
+    });
+    setTimeout(() => process.exit(1), 10000).unref();
+  };
 
-// Routes
-app.use('/api/auth', require('./routes/auth'));
-app.use('/api/tasks', require('./routes/tasks'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+}
 
-// Ce handler ne catch que les erreurs synchrones. Les erreurs dans les promesses ne sont pas gérées.
-app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).send('Something broke!');
+process.on('unhandledRejection', (reason) => {
+  logger.error(`Promesse rejetée non gérée : ${reason instanceof Error ? reason.stack : reason}`);
 });
 
-const PORT = process.env.PORT || 5000;
+process.on('uncaughtException', (err) => {
+  logger.error(`Exception non interceptée : ${err.stack}`);
+  process.exit(1);
+});
 
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+start().catch((err) => {
+  logger.error(`Démarrage impossible : ${err.message}`);
+  process.exit(1);
+});

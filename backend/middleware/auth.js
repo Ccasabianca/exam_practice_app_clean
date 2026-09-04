@@ -1,19 +1,28 @@
-const jwt = require('jsonwebtoken');
+/** authentification par cookie httponly @module middleware/auth */
+const { COOKIE_NAME, verifyToken } = require('../utils/token');
+const logger = require('../utils/logger');
 
-module.exports = function (req, res, next) {
-  // Get token from header
-  const token = req.header('x-auth-token');
+/** vérifie le jeton du cookie et remplit req.user */
+function auth(req, res, next) {
+  const token = req.cookies ? req.cookies[COOKIE_NAME] : undefined;
 
-  // Check if not token
   if (!token) {
-    return res.status(401).json({ msg: 'No token, authorization denied' });
+    return res.status(401).json({ msg: 'Authentification requise', code: 'NO_TOKEN' });
   }
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = decoded.user;
-    next();
+    const payload = verifyToken(token);
+    req.user = { id: payload.sub, username: payload.username };
+    return next();
   } catch (err) {
-    res.status(418).json({ msg: 'Token is not valid' });
+    // fix : 401 au lieu de 418 pour un jeton invalide, expiration distinguée et rejet journalisé
+    const expired = err.name === 'TokenExpiredError';
+    logger.warn('auth.token_rejected', { reason: err.name, ip: req.ip, path: req.originalUrl });
+    return res.status(401).json({
+      msg: expired ? 'Session expirée, veuillez vous reconnecter' : 'Jeton invalide',
+      code: expired ? 'TOKEN_EXPIRED' : 'TOKEN_INVALID',
+    });
   }
-};
+}
+
+module.exports = auth;

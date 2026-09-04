@@ -1,0 +1,23 @@
+{
+  "source": {
+    "include": [
+      "app.js",
+      "server.js",
+      "config",
+      "middleware",
+      "models",
+      "routes",
+      "utils",
+      "validators"
+    ],
+    "includePattern": ".js$",
+    "excludePattern": "node_modules"
+  },
+  "opts": {
+    "destination": "./docs",
+    "recurse": true,
+    "readme": "../README.md"
+  },
+  "plugins": ["plugins/markdown"],
+  "templates": { "cleverLinks": true }
+}

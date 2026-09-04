@@ -1,77 +1,101 @@
+/** routes des tâches, toutes authentifiées @module routes/tasks */
 const express = require('express');
-const router = express.Router();
-const auth = require('../middleware/auth');
 const Task = require('../models/Task');
+const auth = require('../middleware/auth');
+const validate = require('../middleware/validate');
+const schemas = require('../validators/schemas');
+const logger = require('../utils/logger');
 
-// @route   GET api/tasks
-// @desc    Get all user tasks
-router.get('/', auth, async (req, res) => {
-  try {
-    const tasks = await Task.find({ user: req.user.id }).sort({ createdAt: -1 });
-    res.json(tasks);
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).send('Server Error');
+const router = express.Router();
+
+router.use(auth);
+
+/** charge une tâche et vérifie qu'elle appartient à l'utilisateur courant, sinon 404 ou 403 */
+async function loadOwnedTask(req, res) {
+  const task = await Task.findById(req.params.id);
+
+  if (!task) {
+    res.status(404).json({ msg: 'Tâche introuvable' });
+    return null;
   }
-});
 
-// @route   POST api/tasks
-// @desc    Add a new task
-router.post('/', auth, async (req, res) => {
-  const { title, description } = req.body;
-
-  // Un utilisateur pourrait injecter du HTML ou du script dans la description.
-  try {
-    const newTask = new Task({
-      title,
-      description,
-      user: req.user.id,
+  // fix : avant n'importe qui connecté pouvait modifier ou supprimer la tâche d'un autre (idor), tentative journalisée
+  if (task.user.toString() !== req.user.id) {
+    logger.warn('task.forbidden_access', {
+      userId: req.user.id,
+      taskId: task.id,
+      ownerId: task.user.toString(),
+      method: req.method,
+      ip: req.ip,
     });
-
-    const task = await newTask.save();
-    res.json(task);
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).send('Server Error');
+    res.status(403).json({ msg: 'Accès refusé : cette tâche ne vous appartient pas' });
+    return null;
   }
+
+  return task;
+}
+
+/**
+ * GET /api/tasks : tâches de l'utilisateur, plus récentes d'abord
+ * @name GET/api/tasks
+ * @function
+ */
+router.get('/', async (req, res) => {
+  const tasks = await Task.find({ user: req.user.id }).sort({ createdAt: -1 });
+  res.json(tasks);
 });
 
-// @route   PUT api/tasks/:id
-// @desc    Update a task
-// N'importe quel utilisateur authentifié peut modifier la tâche de n'importe qui d'autre s'il connaît l'ID de la tâche.
-// Il manque une vérification pour s'assurer que la tâche appartient bien à l'utilisateur qui fait la requête.
-router.put('/:id', auth, async (req, res) => {
-  const { title, description, isCompleted } = req.body;
-  
-  try {
-    let task = await Task.findById(req.params.id);
-    if (!task) return res.status(404).json({ msg: 'Task not found' });
-
-    task = await Task.findByIdAndUpdate(req.params.id, { $set: { title, description, isCompleted } }, { new: true });
-    
-    // Ici c'est corrigé, mais c'est un bug courant à surveiller.
-    res.json(task);
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).send('Server Error');
-  }
+/**
+ * POST /api/tasks : crée une tâche
+ * @name POST/api/tasks
+ * @function
+ */
+router.post('/', validate(schemas.createTask), async (req, res) => {
+  // fix : titre validé et nettoyé, un formulaire vide renvoie 400 au lieu de 500, le propriétaire est toujours l'utilisateur courant
+  const task = await Task.create({ ...req.body, user: req.user.id });
+  logger.info('task.created', { userId: req.user.id, taskId: task.id });
+  res.status(201).json(task);
 });
 
-// @route   DELETE api/tasks/:id
-// @desc    Delete a task
-// Un utilisateur peut supprimer les tâches des autres.
-router.delete('/:id', auth, async (req, res) => {
-  try {
-    let task = await Task.findById(req.params.id);
-    if (!task) return res.status(404).json({ msg: 'Task not found' });
+/**
+ * PUT /api/tasks/:id : modifie titre, description ou état
+ * @name PUT/api/tasks/:id
+ * @function
+ */
+router.put(
+  '/:id',
+  // fix : un id mal formé renvoie 400 au lieu de 500
+  validate(schemas.taskIdParams, 'params'),
+  validate(schemas.updateTask),
+  async (req, res) => {
+    const task = await loadOwnedTask(req, res);
+    if (!task) return;
 
-    await Task.findByIdAndRemove(req.params.id);
+    Object.assign(task, req.body);
+    await task.save();
 
-    res.json({ msg: 'Task removed' });
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).send('Server Error');
+    logger.info('task.updated', {
+      userId: req.user.id,
+      taskId: task.id,
+      fields: Object.keys(req.body),
+    });
+    res.json(task);
   }
+);
+
+/**
+ * DELETE /api/tasks/:id : supprime une tâche
+ * @name DELETE/api/tasks/:id
+ * @function
+ */
+router.delete('/:id', validate(schemas.taskIdParams, 'params'), async (req, res) => {
+  const task = await loadOwnedTask(req, res);
+  if (!task) return;
+
+  // fix : findByIdAndRemove n'existe plus dans mongoose 8+
+  await task.deleteOne();
+  logger.info('task.deleted', { userId: req.user.id, taskId: task.id });
+  res.json({ msg: 'Tâche supprimée', id: task.id });
 });
 
 module.exports = router;

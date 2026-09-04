@@ -1,0 +1,77 @@
+### 1. En-têtes de réponse + CORS avec une Origin arbitraire
+HTTP/1.1 401 Unauthorized
+X-Powered-By: Express
+Access-Control-Allow-Origin: *
+Content-Type: application/json; charset=utf-8
+Content-Length: 40
+ETag: W/"28-fei2VidDysiqpjfsfdAl6PTacRU"
+Date: Fri, 04 Sep 2026 08:19:58 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+
+
+### 2. Inscription avec identifiants faibles (username 'a', mot de passe '1')
+{"token":"<jeton>"}
+HTTP 200
+
+### 3. Injection NoSQL au login : username = {"$gt":""} (sans connaître le nom d'utilisateur)
+{"token":"<jeton>"}
+HTTP 200
+
+### 4. Création de deux utilisateurs alice_repro et bob_repro
+alice: <jeton>  bob: <jeton>
+
+### 5. Token invalide : quel code HTTP ?
+{"msg":"Token is not valid"}
+HTTP 418
+
+### 6. Tâche sans titre (équivalent formulaire vide) : quel code HTTP ?
+Server Error
+HTTP 500
+
+### 7. Titre et description contenant du HTML/JS (XSS stocké)
+{"user":"6a9a7f2e02d944e70ed3ce85","title":"<script>alert(\"test\")</script>","description":"<img src=x onerror=alert(1)>","isCompleted":false,"_id":"6a9a7f2e02d944e70ed3ce8b","createdAt":"2026-09-04T08:19:58.941Z","__v":0}
+HTTP 200
+
+### 8. alice crée une tâche privée
+{"user":"6a9a7f2e02d944e70ed3ce85","title":"Tache privee d alice","isCompleted":false,"_id":"6a9a7f2e02d944e70ed3ce8d","createdAt":"2026-09-04T08:19:58.966Z","__v":0}
+
+### 9. IDOR : bob modifie la tâche d'alice (6a9a7f2e02d944e70ed3ce8d)
+{"_id":"6a9a7f2e02d944e70ed3ce8d","user":"6a9a7f2e02d944e70ed3ce85","title":"Modifiee par bob","isCompleted":true,"createdAt":"2026-09-04T08:19:58.966Z","__v":0}
+HTTP 200
+
+### 10. IDOR : bob supprime la tâche d'alice
+{"msg":"Task removed"}
+HTTP 200
+
+### 11. Ce qu'il reste à alice
+[{"_id":"6a9a7f2e02d944e70ed3ce8b","user":"6a9a7f2e02d944e70ed3ce85","title":"<script>alert(\"test\")</script>","description":"<img src=x onerror=alert(1)>","isCompleted":false,"createdAt":"2026-09-04T08:19:58.941Z","__v":0}]
+HTTP 200
+
+### 12. Identifiant de tâche mal formé
+Server Error
+HTTP 500
+
+### 13. Route inexistante
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Error</title>
+</head>
+<body>
+<pre>Cannot GET /api/inexistante</pre>
+</body>
+</html>
+
+HTTP 404
+
+
+### 14. Journal serveur (console.log brut)
+Server running on port 5000
+MongoDB Connected...
+Task validation failed: title: Path `title` is required.
+Cast to ObjectId failed for value "abc" (type string) at path "_id" for model "Task"
+
+### 15. Nettoyage de la base de reproduction
+1

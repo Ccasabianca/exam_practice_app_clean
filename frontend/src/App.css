@@ -1,10 +1,105 @@
+/* fix : un seul css, l'ancien header était déclaré deux fois et recouvrait le contenu, header et footer en 100vw faisaient une barre horizontale */
+:root {
+  --color-primary: #4b6cb7;
+  --color-accent: #007bff;
+  --color-accent-dark: #0056b3;
+  --color-danger: #dc3545;
+  --color-success: #198754;
+  --color-bg: #f4f7f6;
+  --color-main: #f5f5f5;
+  --color-text: #333333;
+  --color-muted: #6c757d;
+  --color-border: #cccccc;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-  background-color: #f4f7f6;
-  margin: 0;
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  line-height: 1.5;
+}
+
+.app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   padding: 20px;
+  background-color: var(--color-primary);
+  color: white;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.nav-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
   display: flex;
   justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.nav-item {
+  margin: 0 15px;
+}
+
+.nav-link {
+  color: white;
+  text-decoration: none;
+  font-weight: bold;
+}
+
+.nav-button {
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font: inherit;
+  font-weight: bold;
+}
+
+.nav-user {
+  color: rgba(255, 255, 255, 0.85);
+  font-style: italic;
+}
+
+.app-main {
+  flex: 1;
+  padding: 20px;
+  background: var(--color-main);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.app-footer {
+  background-color: var(--color-primary);
+  color: #fff;
+  text-align: center;
+  padding: 16px 0;
+}
+
+.app-footer p {
+  margin: 0;
 }
 
 .container {
@@ -18,7 +113,8 @@ body {
 
 h1 {
   text-align: center;
-  color: #333;
+  color: var(--color-text);
+  margin-top: 0;
 }
 
 .form-group {
@@ -35,9 +131,28 @@ h1 {
 .form-group input {
   width: 100%;
   padding: 10px;
-  border: 1px solid #ccc;
+  border: 1px solid var(--color-border);
   border-radius: 4px;
-  box-sizing: border-box;
+  font: inherit;
+}
+
+.form-group input:focus {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+.form-group input[aria-invalid='true'] {
+  border-color: var(--color-danger);
+}
+
+.form-footer {
+  text-align: center;
+  margin: 20px 0 0;
+  color: var(--color-muted);
+}
+
+.form-footer a {
+  color: var(--color-accent);
 }
 
 .btn {
@@ -45,27 +160,106 @@ h1 {
   padding: 12px;
   border: none;
   border-radius: 4px;
-  background-color: #007bff;
+  background-color: var(--color-accent);
   color: white;
   font-size: 16px;
+  font-family: inherit;
   cursor: pointer;
   transition: background-color 0.2s;
 }
 
-.btn:hover {
-  background-color: #0056b3;
+.btn:hover:not(:disabled) {
+  background-color: var(--color-accent-dark);
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.task-form-btn {
+  margin-top: 10px;
+}
+
+.btn-small {
+  width: auto;
+  padding: 5px 10px;
+  font-size: 14px;
+}
+
+.btn-secondary {
+  background-color: #e9ecef;
+  color: var(--color-text);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background-color: #d6dbe0;
+}
+
+.btn-danger {
+  background-color: var(--color-danger);
+}
+
+.btn-danger:hover:not(:disabled) {
+  background-color: #b02a37;
+}
+
+.alert {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 4px;
+  margin-bottom: 16px;
+  border: 1px solid transparent;
+}
+
+.alert-error {
+  background: #fdecea;
+  color: #7f1d1d;
+  border-color: #f5c2c7;
+}
+
+.alert-success {
+  background: #e6f4ea;
+  color: #14532d;
+  border-color: #badbcc;
+}
+
+.alert-info {
+  background: #e7f1ff;
+  color: #084298;
+  border-color: #b6d4fe;
+}
+
+.alert-close {
+  background: transparent;
+  border: none;
+  font-size: 1.2rem;
+  line-height: 1;
+  cursor: pointer;
+  color: inherit;
+  padding: 0 4px;
+}
+
+.loading,
+.task-empty {
+  text-align: center;
+  color: var(--color-muted);
 }
 
 .task-list {
   list-style: none;
   padding: 0;
+  margin: 0;
 }
 
 .task-item {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 15px;
+  gap: 12px;
+  padding: 15px 0;
   border-bottom: 1px solid #eee;
 }
 
@@ -73,79 +267,76 @@ h1 {
   border-bottom: none;
 }
 
-.task-item.completed span {
+.task-check {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  cursor: pointer;
+  accent-color: var(--color-success);
+}
+
+.task-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.task-title {
+  word-break: break-word;
+}
+
+.task-description {
+  color: var(--color-muted);
+  font-size: 0.9rem;
+  word-break: break-word;
+}
+
+.task-item.completed .task-title {
   text-decoration: line-through;
   color: #aaa;
 }
 
-.task-item button {
-  border: none;
-  background: #dc3545;
-  color: white;
-  padding: 5px 10px;
-  border-radius: 4px;
-  cursor: pointer;
-}
-
-header {
-  background: #333;
-  color: white;
-  padding: 1rem 0;
-  text-align: center;
-}
-
-header nav ul {
-  list-style: none;
-  padding: 0;
-  margin: 0;
+.task-actions {
   display: flex;
-  justify-content: center;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
-header nav ul li {
-  margin: 0 15px;
-}
-
-header nav ul li a {
-  color: white;
-  text-decoration: none;
-  font-weight: bold;
-}
-
-footer {
-  width: 100vw;
-  background: #222;
-  color: #fff;
-  text-align: center;
-  padding: 16px 0;
-  position: relative;
-  bottom: 0;
-}
-
-.App {
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-}
-
-header {
-  width: 100vw;
-  position: fixed;
-  top: 0;
-  left: 0;
-  z-index: 1;
-  height: 60px; /* Ajustez selon la taille du Header */
-  background: #222;
-  color: #fff;
-}
-
-main {
+.task-edit {
   flex: 1;
-  margin-top: 60px; /* Même valeur que header height */
-  padding: 20px;
-  background: #f5f5f5;
-  min-width: 0;
   display: flex;
-  justify-content: center; /* centre horizontalement */
-  align-items: center;     /* centre verticalement */
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.task-edit input {
+  flex: 1;
+  min-width: 140px;
+  padding: 8px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  font: inherit;
+}
+
+@media (max-width: 600px) {
+  .container {
+    padding: 20px;
+  }
+
+  .app-main {
+    padding: 12px;
+    align-items: flex-start;
+  }
+
+  .task-item {
+    flex-wrap: wrap;
+  }
+
+  .task-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
 }

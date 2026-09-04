@@ -1,0 +1,46 @@
+### 1. Inscription faible 'a' / '1'
+{"msg":"Données invalides","errors":[{"field":"username","message":"Le nom d'utilisateur doit contenir au moins 3 caractères"},{"field":"password","message":"Le mot de passe doit contenir au moins 8 caractères"}]}
+HTTP 400
+
+### 2. Injection NoSQL au login
+{"msg":"Données invalides","errors":[{"field":"username","message":"Le nom d'utilisateur doit être une chaîne de caractères"}]}
+HTTP 400
+
+### 3. Inscription alice_1788512296 et bob_1788512296 (jeton dans un cookie HttpOnly, absent du corps)
+HTTP/1.1 201 Created
+Set-Cookie: token=<jeton>; Max-Age=3600; Path=/; Expires=Fri, 04 Sep 2026 09:58:16 GMT; HttpOnly; SameSite=Lax
+{"user":{"id":"6a9a88284eefc7bbee7866e0","username":"alice_1788512296"}}
+
+### 4. Jeton invalide sur une route protégée
+{"msg":"Jeton invalide","code":"TOKEN_INVALID"}
+HTTP 401
+
+### 5. Tâche sans titre
+{"msg":"Données invalides","errors":[{"field":"title","message":"Le titre est obligatoire"}]}
+HTTP 400
+
+### 6. Titre et description avec HTML/JS
+{"user":"6a9a88284eefc7bbee7866e0","title":"Acheter du pain","description":"Sans gluten","isCompleted":false,"_id":"6a9a88284eefc7bbee7866e2","createdAt":"2026-09-04T08:58:16.893Z","updatedAt":"2026-09-04T08:58:16.893Z"}
+HTTP 201
+
+### 7. alice crée une tâche privée, bob tente de la modifier puis de la supprimer
+{"msg":"Accès refusé : cette tâche ne vous appartient pas"}
+HTTP 403
+{"msg":"Accès refusé : cette tâche ne vous appartient pas"}
+HTTP 403
+
+### 8. alice coche sa tâche (PUT légitime)
+{"_id":"6a9a88284eefc7bbee7866e3","user":"6a9a88284eefc7bbee7866e0","title":"Tache privee d alice","description":"","isCompleted":true,"createdAt":"2026-09-04T08:58:16.926Z","updatedAt":"2026-09-04T08:58:17.034Z"}
+HTTP 200
+
+### 9. Identifiant mal formé, route inexistante
+{"msg":"Données invalides","errors":[{"field":"id","message":"L'identifiant de tâche est invalide"}]}
+HTTP 400
+{"msg":"Route GET /api/inexistante introuvable"}
+HTTP 404
+
+### 10. Déconnexion puis sonde de session
+{"msg":"Déconnexion effectuée"}
+HTTP 200
+{"user":null}
+HTTP 200
