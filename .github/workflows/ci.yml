@@ -34,8 +34,8 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 24
           cache: npm
@@ -46,8 +46,17 @@ jobs:
       - run: npm test
         env:
           MONGO_URI_TEST: mongodb://127.0.0.1:27017/todo_test
+      # bloque sur une vulnérabilité high ou critical, mais pas sur une panne du service d'avis npm
       - name: Audit des dépendances de production
-        run: npm audit --omit=dev --audit-level=high
+        run: |
+          npm audit --omit=dev --json > audit.json || true
+          node -e "
+            const a = require('./audit.json');
+            if (a.error) { console.log('service npm audit indisponible :', a.error.summary || a.error.code); process.exit(0); }
+            const v = a.metadata.vulnerabilities;
+            console.log('vulnérabilités :', JSON.stringify(v));
+            if ((v.high || 0) + (v.critical || 0) > 0) process.exit(1);
+          "
 
   frontend:
     name: Frontend - lint, tests et build
@@ -56,8 +65,8 @@ jobs:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 24
           cache: npm
@@ -68,7 +77,15 @@ jobs:
       - run: npm test
       - run: npm run build
       - name: Audit des dépendances
-        run: npm audit --audit-level=high
+        run: |
+          npm audit --json > audit.json || true
+          node -e "
+            const a = require('./audit.json');
+            if (a.error) { console.log('service npm audit indisponible :', a.error.summary || a.error.code); process.exit(0); }
+            const v = a.metadata.vulnerabilities;
+            console.log('vulnérabilités :', JSON.stringify(v));
+            if ((v.high || 0) + (v.critical || 0) > 0) process.exit(1);
+          "
 
   images:
     name: Image ${{ matrix.name }} - build, scan, push
@@ -84,22 +101,22 @@ jobs:
           - name: frontend
             context: ./frontend
     steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-buildx-action@v3
+      - uses: actions/checkout@v5
+      - uses: docker/setup-buildx-action@v4
       - uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ghcr.io/${{ github.repository }}-${{ matrix.name }}
           tags: |
             type=ref,event=branch
             type=sha,prefix=
       - name: Construire l'image (locale, pour analyse)
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: ${{ matrix.context }}
           load: true
@@ -107,7 +124,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
       - name: Analyse de vulnérabilités (rapport HIGH et CRITICAL)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@0.36.0
         with:
           image-ref: scan-image:${{ matrix.name }}
           severity: HIGH,CRITICAL
@@ -115,7 +132,7 @@ jobs:
           format: table
           exit-code: "0"
       - name: Analyse de vulnérabilités (blocage sur CRITICAL corrigeable)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@0.36.0
         with:
           image-ref: scan-image:${{ matrix.name }}
           severity: CRITICAL
@@ -123,7 +140,7 @@ jobs:
           format: table
           exit-code: "1"
       - name: Publier sur GHCR
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: ${{ matrix.context }}
           push: true

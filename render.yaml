@@ -1,0 +1,124 @@
+# déploiement render (blueprint) : deux api depuis les images ghcr construites par le pipeline,
+# deux fronts statiques construits depuis le dépôt. à appliquer via new > blueprint dans le dashboard
+services:
+  - type: web
+    name: examenblanc-api-preprod
+    runtime: image
+    image:
+      url: ghcr.io/ccasabianca/exam_practice_app_clean-backend:develop
+    plan: free
+    region: frankfurt
+    healthCheckPath: /health
+    autoDeploy: false
+    domains:
+      - api-preprod.examenblanc.mywatchbuddy.com
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MONGO_URI
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: 1h
+      - key: CORS_ORIGIN
+        value: https://preprod.examenblanc.mywatchbuddy.com,https://examenblanc-front-preprod.onrender.com
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: COOKIE_SAMESITE
+        value: none
+      - key: TRUST_PROXY
+        value: "true"
+      - key: LOG_LEVEL
+        value: info
+      - key: RATE_LIMIT_AUTH_MAX
+        value: "20"
+
+  - type: web
+    name: examenblanc-front-preprod
+    runtime: static
+    branch: develop
+    rootDir: frontend
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+    autoDeploy: false
+    domains:
+      - preprod.examenblanc.mywatchbuddy.com
+    envVars:
+      - key: VITE_API_URL
+        value: https://api-preprod.examenblanc.mywatchbuddy.com/api
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    headers:
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: X-Frame-Options
+        value: SAMEORIGIN
+      - path: /*
+        name: Referrer-Policy
+        value: no-referrer
+
+  - type: web
+    name: examenblanc-api
+    runtime: image
+    image:
+      url: ghcr.io/ccasabianca/exam_practice_app_clean-backend:main
+    plan: free
+    region: frankfurt
+    healthCheckPath: /health
+    autoDeploy: false
+    domains:
+      - api.examenblanc.mywatchbuddy.com
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MONGO_URI
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: 1h
+      - key: CORS_ORIGIN
+        value: https://examenblanc.mywatchbuddy.com,https://examenblanc-front.onrender.com
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: COOKIE_SAMESITE
+        value: none
+      - key: TRUST_PROXY
+        value: "true"
+      - key: LOG_LEVEL
+        value: info
+      - key: RATE_LIMIT_AUTH_MAX
+        value: "20"
+
+  - type: web
+    name: examenblanc-front
+    runtime: static
+    branch: main
+    rootDir: frontend
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+    autoDeploy: false
+    domains:
+      - examenblanc.mywatchbuddy.com
+    envVars:
+      - key: VITE_API_URL
+        value: https://api.examenblanc.mywatchbuddy.com/api
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    headers:
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: X-Frame-Options
+        value: SAMEORIGIN
+      - path: /*
+        name: Referrer-Policy
+        value: no-referrer
