@@ -1,5 +1,7 @@
 # déploiement render (blueprint) : deux api depuis les images ghcr construites par le pipeline,
-# deux fronts statiques construits depuis le dépôt. à appliquer via new > blueprint dans le dashboard
+# deux fronts statiques construits depuis le dépôt. à appliquer via new > blueprint dans le dashboard.
+# sans moyen de paiement render n'accepte que deux domaines personnalisés : ils vont aux fronts, qui
+# relaient /api et /health vers leur api par règle de réécriture (même origine, pas de cors)
 services:
   - type: web
     name: examenblanc-api-preprod
@@ -10,8 +12,6 @@ services:
     region: frankfurt
     healthCheckPath: /health
     autoDeploy: false
-    domains:
-      - api-preprod.examenblanc.mywatchbuddy.com
     envVars:
       - key: NODE_ENV
         value: production
@@ -46,8 +46,14 @@ services:
       - preprod.examenblanc.mywatchbuddy.com
     envVars:
       - key: VITE_API_URL
-        value: https://api-preprod.examenblanc.mywatchbuddy.com/api
+        value: /api
     routes:
+      - type: rewrite
+        source: /api/*
+        destination: https://examenblanc-api-preprod.onrender.com/api/*
+      - type: rewrite
+        source: /health
+        destination: https://examenblanc-api-preprod.onrender.com/health
       - type: rewrite
         source: /*
         destination: /index.html
@@ -71,8 +77,6 @@ services:
     region: frankfurt
     healthCheckPath: /health
     autoDeploy: false
-    domains:
-      - api.examenblanc.mywatchbuddy.com
     envVars:
       - key: NODE_ENV
         value: production
@@ -107,8 +111,14 @@ services:
       - examenblanc.mywatchbuddy.com
     envVars:
       - key: VITE_API_URL
-        value: https://api.examenblanc.mywatchbuddy.com/api
+        value: /api
     routes:
+      - type: rewrite
+        source: /api/*
+        destination: https://examenblanc-api.onrender.com/api/*
+      - type: rewrite
+        source: /health
+        destination: https://examenblanc-api.onrender.com/health
       - type: rewrite
         source: /*
         destination: /index.html

@@ -72,11 +72,12 @@ scannées avec Trivy et publiées sur GHCR, puis déploiement de l'environnement
 
 | Environnement | Branche | Front | API |
 |---|---|---|---|
-| préproduction | develop | https://preprod.examenblanc.mywatchbuddy.com | https://api-preprod.examenblanc.mywatchbuddy.com/health |
-| production | main | https://examenblanc.mywatchbuddy.com | https://api.examenblanc.mywatchbuddy.com/health |
+| préproduction | develop | https://preprod.examenblanc.mywatchbuddy.com | https://preprod.examenblanc.mywatchbuddy.com/api (santé : /health) |
+| production | main | https://examenblanc.mywatchbuddy.com | https://examenblanc.mywatchbuddy.com/api (santé : /health) |
 
 Hébergement Render (Frankfurt, décrit dans `render.yaml`), base MongoDB Atlas (Paris), DNS chez
-Hostinger, certificats émis automatiquement par Render.
+Hostinger, certificats émis automatiquement par Render. Le front relaie `/api` et `/health` vers son API
+(même origine), les API restent joignables directement sur leur adresse onrender.com.
 
 ## Supervision
 

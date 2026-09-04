@@ -19,11 +19,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # /health passe par le domaine du front, qui relaie vers l'api : toute la chaîne est testée
           - name: API production
-            url: https://api.examenblanc.mywatchbuddy.com/health
+            url: https://examenblanc.mywatchbuddy.com/health
             keyword: '"status":"ok"'
           - name: API préproduction
-            url: https://api-preprod.examenblanc.mywatchbuddy.com/health
+            url: https://preprod.examenblanc.mywatchbuddy.com/health
             keyword: '"status":"ok"'
           - name: Front production
             url: https://examenblanc.mywatchbuddy.com/

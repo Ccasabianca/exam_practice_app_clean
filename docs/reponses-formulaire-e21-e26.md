@@ -1,6 +1,6 @@
 # Réponses au formulaire, session hébergement (E21 à E26)
 
-Brouillon à relire et à compléter avec les URL et les captures. Les [crochets] sont à remplacer.
+Brouillon à relire et à compléter avec les captures. Les [crochets] restent à remplacer.
 
 ## E21. Choix de l'hébergement et environnement de qualification
 
@@ -12,36 +12,36 @@ Docker, HTTPS automatique, domaine personnalisé, deux environnements séparés,
 métriques intégrés, région UE, temps de mise en place compatible avec l'examen.
 
 Render coche tout : PaaS de la famille Heroku, conteneurs sur infra gérée, répartiteur de
-charge, TLS Let's Encrypt automatique, health checks avec redémarrage, déploiements sans
-coupure, retour arrière, logs, région Frankfurt. GCP et AWS demandent un compte de
-facturation et une heure de mise en place en plus ; Scaleway impose une vérification
-d'identité. Limites du plan gratuit Render à connaître : mise en veille après 15 minutes
-sans trafic (réveil en une minute environ), 750 heures d'instance par mois, pas de disque
-persistant. Une instance Starter à 7 dollars par mois lève la mise en veille.
+charge, TLS automatique, health checks avec redémarrage, déploiements sans coupure, retour
+arrière, logs, région Frankfurt. GCP et AWS demandent un compte de facturation et une heure de
+mise en place en plus ; Scaleway impose une vérification d'identité. Limites du plan gratuit
+Render à connaître : mise en veille après 15 minutes sans trafic (réveil en une minute
+environ), 750 heures d'instance par mois, pas de disque persistant. Une instance Starter à
+7 dollars par mois lève la mise en veille.
 
-La base est sur MongoDB Atlas M0 (gratuit, Frankfurt), avec une base et un utilisateur
-distincts par environnement. Les images Docker sont construites par le pipeline et publiées
+La base est sur MongoDB Atlas M0 (gratuit, Paris), avec une base par environnement
+(todo_preprod et todo_prod). Les images Docker sont construites par le pipeline et publiées
 sur le registre GitHub (GHCR).
 
-Environnement de qualification (préproduction) : branche develop, API
-https://api-preprod.examenblanc.mywatchbuddy.com, front https://preprod.examenblanc.mywatchbuddy.com,
-base todo_preprod. Tout est décrit dans render.yaml (infrastructure as code, appliqué via
-un Blueprint Render).
+Environnement de qualification (préproduction) : branche develop, front https://preprod.examenblanc.mywatchbuddy.com (l'API est servie sous le même nom via /api),
+base todo_preprod. Tout est décrit dans render.yaml (infrastructure as code, appliqué via un
+Blueprint Render).
 
 Captures : tableau comparatif, dashboard Render avec les quatre services, cluster Atlas,
 render.yaml, page de préprod en ligne.
 
 ## E22. Mise en œuvre sécurisée de la production et administration
 
-Production : branche main, API https://api.examenblanc.mywatchbuddy.com, front
-https://examenblanc.mywatchbuddy.com, base todo_prod.
+Production : branche main, front https://examenblanc.mywatchbuddy.com (API sous le même nom via /api),
+base todo_prod.
 
 Mesures :
 - secrets uniquement dans les variables d'environnement Render, jamais dans le dépôt
   (.env ignoré par git, .env.example fourni) ; JWT_SECRET distinct par environnement et
   généré par Render ; le serveur refuse de démarrer si le secret fait moins de 32 caractères
-- utilisateurs Atlas limités en droits à leur base ; allowlist réseau restreinte aux IP
-  sortantes de Render [à confirmer après remplacement du 0.0.0.0/0 provisoire]
+- une base Atlas par environnement ; allowlist réseau [0.0.0.0/0 provisoire, à remplacer par
+  les IP sortantes de Render] ; un utilisateur readWrite par base reste à créer à la place du
+  compte admin unique
 - HTTPS forcé par Render, cookie de session HttpOnly + Secure, helmet (CSP, HSTS...),
   CORS en liste blanche, limitation de débit, validation Joi de toutes les entrées
 - conteneur non-root, image minimale, scan Trivy dans le pipeline, Dependabot hebdomadaire
@@ -50,34 +50,38 @@ Mesures :
   commit exact
 - health check /health surveillé par Render (redémarrage automatique), retour arrière en un
   clic sur le déploiement précédent
-- double authentification activée sur GitHub, Render et Atlas [à confirmer]
 - administration : dashboard Render (logs, métriques, variables, rollback), Atlas (Data
   Explorer, métriques), sauvegarde manuelle par mongodump documentée car M0 n'a pas de
   sauvegarde automatique
+- double authentification sur GitHub, Render et Atlas [à confirmer]
 
-Captures : variables d'environnement Render (valeurs masquées), utilisateurs et allowlist
-Atlas, page de prod en ligne, un déploiement Render avec son commit.
+Captures : variables d'environnement Render (valeurs masquées), allowlist Atlas, page de
+prod en ligne, un déploiement Render avec son commit.
 
 ## E23. Nom de domaine, DNS, certificats
 
 Je réutilise mon domaine mywatchbuddy.com (Hostinger, DNS chez dns-parking.com) avec un
-sous-domaine dédié à l'exercice, examenblanc.mywatchbuddy.com. Quatre enregistrements CNAME
-dans la zone DNS Hostinger pointent vers les services Render :
+sous-domaine dédié à l'exercice, examenblanc.mywatchbuddy.com. Sans moyen de paiement, Render
+limite le compte à deux domaines personnalisés : je les ai donnés aux deux fronts, et chaque
+front relaie /api et /health vers son API par une règle de réécriture (proxy), comme le fait
+nginx dans mon docker compose. Résultat : une seule origine par environnement, pas de CORS
+entre front et API, cookie de session plus simple. Les API restent joignables en HTTPS sur leur
+adresse onrender.com.
 
-| Nom | Environnement | Cible |
-|---|---|---|
-| examenblanc | front prod | [examenblanc-front.onrender.com] |
-| api.examenblanc | API prod | [examenblanc-api.onrender.com] |
-| preprod.examenblanc | front préprod | [examenblanc-front-preprod.onrender.com] |
-| api-preprod.examenblanc | API préprod | [examenblanc-api-preprod.onrender.com] |
+| Nom | Environnement | Type | Cible |
+|---|---|---|---|
+| examenblanc | production | CNAME | examenblanc-front.onrender.com |
+| preprod.examenblanc | préproduction | CNAME | examenblanc-front-preprod.onrender.com |
 
-Render vérifie chaque domaine puis émet un certificat Let's Encrypt, renouvelé
-automatiquement. Vérifications : cadenas et détail du certificat dans le navigateur, `curl -vI`
-sur les quatre noms, rapport SSL Labs [note obtenue]. Front et API partagent le même domaine
-racine, donc le cookie de session fonctionne sans réglage cross-site.
+L'ALIAS posé par Hostinger sur examenblanc a été supprimé, un CNAME ne pouvant pas cohabiter
+avec un autre enregistrement du même nom. TTL 300. Render vérifie le domaine puis émet et
+renouvelle le certificat automatiquement (autorité Google Trust Services). Vérifications :
+cadenas et détail du certificat dans le navigateur, curl -vI et openssl s_client sur les
+deux noms, rapport SSL Labs [note]. Deux enregistrements api.examenblanc et
+api-preprod.examenblanc avaient été créés avant de connaître la limite ; ils sont inutilisés.
 
-Captures : zone DNS Hostinger, page Custom Domains de Render avec les certificats émis,
-cadenas sur préprod et prod, rapport SSL Labs.
+Captures : zone DNS Hostinger, Custom Domains de Render avec les certificats émis, cadenas sur
+préprod et prod, rapport SSL Labs.
 
 ## E24. Déploiement automatisé (CI/CD)
 
@@ -97,6 +101,11 @@ frontend (build Vite puis nginx), docker-compose.yml pour une préprod locale co
 MongoDB. Dependabot ouvre les mises à jour de dépendances en pull request, vérifiées par le
 même pipeline.
 
+Incidents rencontrés et corrigés pendant la mise en place, à raconter : tag de l'action Trivy
+(passage au préfixe v), panne ponctuelle du service npm audit (l'étape ne bloque plus sur une
+indisponibilité du service), image demandée avec le sha complet alors qu'elle était taguée
+avec le sha court.
+
 Captures : run vert avec les quatre jobs, packages GHCR, onglet Environments de GitHub avec
 les déploiements, un déploiement Render déclenché par le pipeline.
 
@@ -107,31 +116,39 @@ niveau piloté par LOG_LEVEL. Chaque requête est journalisée (méthode, URL, s
 réelle derrière le proxy, utilisateur), ainsi que les événements de sécurité : connexion
 réussie ou échouée avec IP, accès refusé à la tâche d'un autre utilisateur, dépassement de
 débit, origine CORS refusée, jeton rejeté. Les logs sont consultables dans Render pour les
-deux environnements [et centralisés dans Better Stack Logs si mis en place].
+deux environnements ; c'est d'ailleurs le log JSON "Could not connect to any servers in your
+MongoDB Atlas cluster" qui m'a permis de diagnostiquer l'allowlist manquante au premier
+déploiement.
 
 Audit : npm audit et scan Trivy à chaque exécution du pipeline, Dependabot hebdomadaire,
 journal des déploiements Render (qui, quoi, quand), Activity Feed Atlas.
 
-Captures : logs JSON d'une connexion et d'un accès refusé dans Render, rapport Trivy dans
-un run, page Dependabot.
+Captures : logs JSON dans Render (connexion, accès refusé, erreur Atlas du premier
+déploiement), rapport Trivy dans un run, page Dependabot.
 
 ## E26. Supervision et alertes
 
-Better Stack Uptime (gratuit) : quatre moniteurs HTTP toutes les 3 minutes sur /health des
-deux API (vérification du mot-clé "ok") et sur les deux fronts, alerte email si deux
-contrôles consécutifs échouent, alerte si le temps de réponse dépasse 2 secondes, alerte si
-le certificat expire dans moins de 7 jours, page de statut publique [URL]. Render surveille
-en plus /health et redémarre le conteneur, et notifie par email les échecs de déploiement.
+Sonde externe : workflow GitHub Actions `Supervision` (.github/workflows/monitoring.yml),
+planifié toutes les dix minutes et lançable à la main. Pour chacune des quatre URL (santé de l'API via
+/health du domaine, page du front, préprod et prod) : disponibilité (code 200), contenu attendu
+(`"status":"ok"` sur /health, titre de la page sur le front), temps de réponse (avertissement au-dessus de 2 s),
+expiration du certificat (échec si moins de 14 jours). Un échec envoie un email GitHub,
+et le badge du README passe au rouge. Effet utile : les pings empêchent la mise en veille
+des services gratuits Render.
 
-Test réel : suspension du service de préprod pendant quelques minutes, réception de
-l'alerte, reprise et clôture de l'incident.
+Côté plateforme : Render surveille /health et redémarre le conteneur, notifie par email les
+échecs de déploiement, et expose les métriques CPU, mémoire et requêtes de chaque service.
 
-Captures : liste des moniteurs, détail d'un moniteur, email d'alerte reçu, page de statut.
+Test d'incident : suspension du service de préprod, lancement manuel du workflow, échec de la
+sonde "API préproduction" et email reçu, reprise du service, sonde de nouveau verte.
+
+Captures : run du workflow Supervision avec les quatre sondes, run en échec pendant le test
+d'incident, email d'alerte, badge du README, métriques Render.
 
 ## Accès à transmettre aux correcteurs
 
 - dépôt : https://github.com/Ccasabianca/exam_practice_app_clean
-- préprod : https://preprod.examenblanc.mywatchbuddy.com et https://api-preprod.examenblanc.mywatchbuddy.com/health
-- prod : https://examenblanc.mywatchbuddy.com et https://api.examenblanc.mywatchbuddy.com/health
+- préprod : https://preprod.examenblanc.mywatchbuddy.com (API : /api, santé : /health)
+- prod : https://examenblanc.mywatchbuddy.com (API : /api, santé : /health)
 - compte de test sur chaque environnement : [identifiant] / [mot de passe]
-- invitations Render, Atlas et Better Stack en lecture : [à envoyer]
+- invitations Render et Atlas en lecture : [à envoyer]

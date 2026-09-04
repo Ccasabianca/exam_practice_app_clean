@@ -7,7 +7,26 @@ commit git.
 
 ## À venir
 
-Hébergement Render (préprod + prod), DNS + HTTPS, supervision et alertes.
+- remplacer le 0.0.0.0/0 de l'allowlist Atlas par les trois IP sortantes de chaque service Render
+- créer un utilisateur Atlas par base (readWrite) à la place du compte admin unique, changer le mot de passe
+- passer les services Render en instance payante si la mise en veille du plan gratuit gêne
+
+## 1.2.0 - 2026-09-04 (session hébergement, E21 à E26)
+
+- conteneurisation : Dockerfile backend (multi-stage, non-root, healthcheck) et frontend (Vite puis
+  nginx), docker-compose.yml avec MongoDB pour une préprod locale complète
+- pipeline GitHub Actions : lint, tests avec Mongo en service, build, scan Trivy, images publiées sur
+  GHCR (tags branche et sha), déploiement de l'environnement de la branche par hook Render avec test
+  de fumée sur /health. Dependabot hebdomadaire
+- hébergement Render (Frankfurt) décrit dans render.yaml : deux API depuis les images GHCR, deux
+  fronts statiques, préprod sur develop et prod sur main, base MongoDB Atlas M0 (Paris) avec une
+  base par environnement
+- domaine : quatre CNAME chez Hostinger sous examenblanc.mywatchbuddy.com, certificats émis par
+  Render
+- supervision : workflow GitHub Actions toutes les dix minutes sur les quatre URL (disponibilité,
+  contenu, temps de réponse, expiration du certificat) avec alerte email, health checks Render
+- j'ai retiré le ré-essai bloquant de npm audit quand le service d'avis npm est en panne, l'audit
+  bloque toujours sur une vulnérabilité high ou critical
 
 ## 1.1.0 - 2026-09-04
 
