@@ -1,13 +1,13 @@
 # syntax=docker/dockerfile:1
 
 # étape 1 : dépendances de prod seulement
-FROM node:24-alpine AS deps
+FROM node:26-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev --no-audit --no-fund
 
 # étape 2 : image minimale sous l'utilisateur node, sonde de santé pour l'orchestrateur
-FROM node:24-alpine AS runner
+FROM node:26-alpine AS runner
 ENV NODE_ENV=production \
     PORT=5000
 WORKDIR /app
