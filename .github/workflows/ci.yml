@@ -108,13 +108,14 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      # tags : nom de la branche et sha complet du commit (celui que le job de déploiement demande à render)
       - id: meta
         uses: docker/metadata-action@v6
         with:
           images: ghcr.io/${{ github.repository }}-${{ matrix.name }}
           tags: |
             type=ref,event=branch
-            type=sha,prefix=
+            type=sha,prefix=,format=long
       - name: Construire l'image (locale, pour analyse)
         uses: docker/build-push-action@v7
         with:
@@ -164,10 +165,24 @@ jobs:
     steps:
       - name: Déployer l'API (image du commit courant)
         if: env.API_HOOK != ''
-        run: curl -fsS -X POST "${API_HOOK}&imgURL=${IMAGE,,}" > /dev/null && echo "Déploiement API déclenché"
+        run: |
+          image="${IMAGE,,}"
+          code=$(curl -sS -o /tmp/render.txt -w '%{http_code}' -X POST "${API_HOOK}&imgURL=${image}")
+          echo "hook API avec l'image ${image} : HTTP $code"
+          if [ "$code" -ge 400 ]; then
+            echo "::warning::le hook a refusé l'image du commit (HTTP $code : $(cat /tmp/render.txt)), déploiement du tag de branche à la place"
+            code=$(curl -sS -o /tmp/render.txt -w '%{http_code}' -X POST "$API_HOOK")
+            echo "hook API sans image : HTTP $code"
+            if [ "$code" -ge 400 ]; then cat /tmp/render.txt; exit 1; fi
+          fi
+          echo "Déploiement API déclenché"
       - name: Déployer le front
         if: env.FRONT_HOOK != ''
-        run: curl -fsS -X POST "$FRONT_HOOK" > /dev/null && echo "Déploiement front déclenché"
+        run: |
+          code=$(curl -sS -o /tmp/render.txt -w '%{http_code}' -X POST "$FRONT_HOOK")
+          echo "hook front : HTTP $code"
+          if [ "$code" -ge 400 ]; then cat /tmp/render.txt; exit 1; fi
+          echo "Déploiement front déclenché"
       - name: Test de fumée sur /health
         if: env.HEALTH_URL != ''
         run: |

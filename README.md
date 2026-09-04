@@ -70,4 +70,18 @@ scannées avec Trivy et publiées sur GHCR, puis déploiement de l'environnement
 
 ## Environnements
 
-À compléter au déploiement : URL de préproduction et de production.
+| Environnement | Branche | Front | API |
+|---|---|---|---|
+| préproduction | develop | https://preprod.examenblanc.mywatchbuddy.com | https://api-preprod.examenblanc.mywatchbuddy.com/health |
+| production | main | https://examenblanc.mywatchbuddy.com | https://api.examenblanc.mywatchbuddy.com/health |
+
+Hébergement Render (Frankfurt, décrit dans `render.yaml`), base MongoDB Atlas (Paris), DNS chez
+Hostinger, certificats émis automatiquement par Render.
+
+## Supervision
+
+![Supervision](https://github.com/Ccasabianca/exam_practice_app_clean/actions/workflows/monitoring.yml/badge.svg)
+
+Le workflow `Supervision` interroge les quatre URL toutes les dix minutes : disponibilité, contenu
+attendu, temps de réponse, expiration du certificat. Un échec déclenche un email GitHub. Render
+surveille en plus `/health` et redémarre le conteneur si besoin.

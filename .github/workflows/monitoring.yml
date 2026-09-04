@@ -1,0 +1,73 @@
+# sondes externes sur les deux environnements toutes les 10 minutes : disponibilité, contenu attendu,
+# temps de réponse, expiration du certificat. un échec = email github au propriétaire du dépôt.
+# lançable à la main (workflow_dispatch) pour un test d'incident
+name: Supervision
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sondes:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: API production
+            url: https://api.examenblanc.mywatchbuddy.com/health
+            keyword: '"status":"ok"'
+          - name: API préproduction
+            url: https://api-preprod.examenblanc.mywatchbuddy.com/health
+            keyword: '"status":"ok"'
+          - name: Front production
+            url: https://examenblanc.mywatchbuddy.com/
+            keyword: "<title>Mes Tâches</title>"
+          - name: Front préproduction
+            url: https://preprod.examenblanc.mywatchbuddy.com/
+            keyword: "<title>Mes Tâches</title>"
+    steps:
+      - name: Disponibilité et contenu
+        env:
+          URL: ${{ matrix.url }}
+          KEYWORD: ${{ matrix.keyword }}
+          NAME: ${{ matrix.name }}
+        run: |
+          # deux essais : le premier peut réveiller un service gratuit render endormi
+          for essai in 1 2; do
+            body=$(curl -sS -m 60 -o /tmp/body -w '%{http_code} %{time_total}' "$URL" 2>/tmp/err) && break
+            sleep 15
+          done
+          code=${body%% *}
+          duree=${body##* }
+          echo "code http : $code, temps de réponse : ${duree}s"
+          if [ "$code" != "200" ]; then
+            echo "::error::$NAME indisponible : code $code ($(cat /tmp/err))"
+            exit 1
+          fi
+          if ! grep -q -- "$KEYWORD" /tmp/body; then
+            echo "::error::$NAME répond mais sans le contenu attendu ($KEYWORD)"
+            head -c 300 /tmp/body
+            exit 1
+          fi
+          if awk -v d="$duree" 'BEGIN { exit !(d > 2) }'; then
+            echo "::warning::$NAME lent : ${duree}s (seuil 2 s)"
+          fi
+      - name: Certificat TLS
+        env:
+          URL: ${{ matrix.url }}
+          NAME: ${{ matrix.name }}
+        run: |
+          host=$(echo "$URL" | sed -E 's#https://([^/]+).*#\1#')
+          fin=$(echo | openssl s_client -servername "$host" -connect "$host:443" 2>/dev/null | openssl x509 -noout -enddate | cut -d= -f2)
+          jours=$(( ( $(date -d "$fin" +%s) - $(date +%s) ) / 86400 ))
+          echo "certificat de $host valable encore $jours jours (expire le $fin)"
+          if [ "$jours" -lt 14 ]; then
+            echo "::error::$NAME : certificat expire dans $jours jours"
+            exit 1
+          fi
