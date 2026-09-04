@@ -1,0 +1,15 @@
+node_modules
+npm-debug.log
+.env
+.env.*
+!.env.example
+tests
+docs
+coverage
+eslint.config.js
+jest.config.js
+jsdoc.json
+.prettierignore
+Dockerfile
+.dockerignore
+*.md

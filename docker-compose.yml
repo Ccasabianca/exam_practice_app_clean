@@ -1,0 +1,49 @@
+# préproduction locale : docker compose up --build puis http://localhost:8080 (JWT_SECRET lu dans .env)
+name: mes-taches
+
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    # port non publié, la base n'est joignable que depuis le réseau interne
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 5000
+      MONGO_URI: mongodb://mongo:27017/todo_preprod
+      JWT_SECRET: ${JWT_SECRET:?Definir JWT_SECRET dans le fichier .env (voir .env.example)}
+      JWT_EXPIRES_IN: 1h
+      CORS_ORIGIN: http://localhost:8080
+      COOKIE_SECURE: "false"
+      COOKIE_SAMESITE: lax
+      TRUST_PROXY: "true"
+      LOG_LEVEL: info
+    depends_on:
+      mongo:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: /api
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  mongo-data:

@@ -1,0 +1,166 @@
+# lint et tests sur push et pull request, puis sur push : images docker scannées et publiées sur ghcr,
+# déploiement de l'environnement de la branche (develop = préproduction, main = production) et test de fumée
+name: CI/CD
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend - lint et tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      mongo:
+        image: mongo:7
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.adminCommand(\"ping\").ok'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run format:check
+      - run: npm test
+        env:
+          MONGO_URI_TEST: mongodb://127.0.0.1:27017/todo_test
+      - name: Audit des dépendances de production
+        run: npm audit --omit=dev --audit-level=high
+
+  frontend:
+    name: Frontend - lint, tests et build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run format:check
+      - run: npm test
+      - run: npm run build
+      - name: Audit des dépendances
+        run: npm audit --audit-level=high
+
+  images:
+    name: Image ${{ matrix.name }} - build, scan, push
+    needs: [backend, frontend]
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: backend
+            context: ./backend
+          - name: frontend
+            context: ./frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}-${{ matrix.name }}
+          tags: |
+            type=ref,event=branch
+            type=sha,prefix=
+      - name: Construire l'image (locale, pour analyse)
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          load: true
+          tags: scan-image:${{ matrix.name }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Analyse de vulnérabilités (rapport HIGH et CRITICAL)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: scan-image:${{ matrix.name }}
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          format: table
+          exit-code: "0"
+      - name: Analyse de vulnérabilités (blocage sur CRITICAL corrigeable)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: scan-image:${{ matrix.name }}
+          severity: CRITICAL
+          ignore-unfixed: true
+          format: table
+          exit-code: "1"
+      - name: Publier sur GHCR
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+
+  deploy:
+    name: Déploiement ${{ github.ref_name == 'main' && 'production' || 'préproduction' }}
+    needs: images
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ github.ref_name == 'main' && 'production' || 'preproduction' }}
+      url: ${{ github.ref_name == 'main' && vars.FRONT_URL_PROD || vars.FRONT_URL_PREPROD }}
+    env:
+      API_HOOK: ${{ github.ref_name == 'main' && secrets.RENDER_DEPLOY_HOOK_API_PROD || secrets.RENDER_DEPLOY_HOOK_API_PREPROD }}
+      FRONT_HOOK: ${{ github.ref_name == 'main' && secrets.RENDER_DEPLOY_HOOK_FRONT_PROD || secrets.RENDER_DEPLOY_HOOK_FRONT_PREPROD }}
+      HEALTH_URL: ${{ github.ref_name == 'main' && vars.HEALTH_URL_PROD || vars.HEALTH_URL_PREPROD }}
+      IMAGE: ghcr.io/${{ github.repository }}-backend:${{ github.sha }}
+    steps:
+      - name: Déployer l'API (image du commit courant)
+        if: env.API_HOOK != ''
+        run: curl -fsS -X POST "${API_HOOK}&imgURL=${IMAGE,,}" > /dev/null && echo "Déploiement API déclenché"
+      - name: Déployer le front
+        if: env.FRONT_HOOK != ''
+        run: curl -fsS -X POST "$FRONT_HOOK" > /dev/null && echo "Déploiement front déclenché"
+      - name: Test de fumée sur /health
+        if: env.HEALTH_URL != ''
+        run: |
+          for i in $(seq 1 30); do
+            if curl -fsS "$HEALTH_URL" | grep -q '"status":"ok"'; then
+              echo "API en ligne : $HEALTH_URL"
+              exit 0
+            fi
+            echo "Tentative $i/30, nouvel essai dans 10 s"
+            sleep 10
+          done
+          echo "L'API ne répond pas correctement après 5 minutes"
+          exit 1
