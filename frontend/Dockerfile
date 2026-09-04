@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # étape 1 : build vite, l'url de l'api est fixée à la build (/api = même origine via nginx)
-FROM node:24-alpine AS build
+FROM node:26-alpine AS build
 WORKDIR /app
 ARG VITE_API_URL=/api
 ENV VITE_API_URL=$VITE_API_URL
